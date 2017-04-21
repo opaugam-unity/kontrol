@@ -3,19 +3,21 @@ kind: Deployment
 metadata:
   name: test
 spec:
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
-        app:  kontrol
+        app: test
+        tier: application
+        controller: test.default.svc
     spec:
       containers:
-      - name: kontrol
-        image: test:latest
-        imagePullPolicy: Never
+      - image: registry2.applifier.info:5005/kontrol
+        name: kontrol
+        imagePullPolicy: Always
         ports:
-        - protocol:       TCP 
-          containerPort:  8000
+        - containerPort: 8000
+          protocol: TCP
 
 ---
 
@@ -29,4 +31,5 @@ spec:
     port: 8000
     targetPort: 8000
   selector:
-    app: kontrol
+    app: test
+    tier: application

@@ -9,5 +9,7 @@ WORKDIR /home/kontrol
 COPY ./ ./
 RUN cd python && /usr/bin/python setup.py install
 EXPOSE 8000
-ENV KONTROL_UPDATE "/usr/bin/python /home/kontrol/scripts/update.py"
+ENV KONTROL_SCRIPTS=./scripts \
+    KONTROL_CALLBACK=monitor
+    
 ENTRYPOINT ["/usr/bin/supervisord","-n","-c","supervisord.conf"]

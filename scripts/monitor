@@ -8,12 +8,12 @@ import requests
 if __name__ == '__main__':
 
     #
-    # - fetch the current pod snapshot and user data attached to this
-    #   cluster (e.g status)
+    # - fetch the current pod snapshot ($POD) and user data attached to this
+    #   cluster ($STATUS)
+    # - both are serialized json
     #
-    print >> sys.stderr, os.environ
     pods = json.loads(os.environ['PODS'])
-    status = json.loads(os.environ['STATUS']) if os.environ['STATUS'] else {}
+    status = json.loads(os.environ['STATUS']) if 'STATUS' in os.environ else {}
 
     for pod in pods:
 

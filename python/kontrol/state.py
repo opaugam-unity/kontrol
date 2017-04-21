@@ -6,7 +6,6 @@ import requests
 from collections import deque
 from kontrol.fsm import Aborted, FSM
 
-
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
 

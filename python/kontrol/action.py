@@ -6,7 +6,6 @@ from kontrol.fsm import Aborted, FSM
 from subprocess import Popen, PIPE, STDOUT
 from threading import Event, Thread
 
-
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
 

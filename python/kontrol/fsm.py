@@ -4,6 +4,7 @@ import sys
 import time
 import traceback
 
+from kontrol import bag
 from pykka import ThreadingActor, ThreadingFuture, Timeout
 from pykka.exceptions import ActorDeadError
 from random import randint
@@ -189,7 +190,7 @@ class FSM(ThreadingActor):
         self.dying = 0
         self.latches = []
         self.path = '?'
-        self.payload = _Container(copy.deepcopy(payload) if payload else {})
+        self.payload = bag(copy.deepcopy(payload) if payload else {})
         self.terminate = 0
         self.last_reset = time.time()
         self.damper = 0
@@ -433,12 +434,6 @@ class _Scheduled(Thread):
         except Exception:
             pass
 
-
-class _Container(dict):
-    """
-    Dict we pass across states (e.g that *data* parameter) with some extra attributes (*cause* for instance).
-    """
-    pass
 
 def _kill(actor_ref):
     """

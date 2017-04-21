@@ -7,8 +7,8 @@ import os
 import requests
 import time
 
+from kontrol import bag
 from kontrol.fsm import Aborted, FSM
-
 
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
@@ -125,17 +125,14 @@ class Actor(FSM):
             self.client.write('/kontrol/%s/stamp' % self.cfg['labels']['app'], stamp)
  
             #
-            # -
+            # - package the $POD and $HASH env. variables
+            # - post to the update actor
+            # - $STATUS will be added by the actor
             #
-            if 'update' in self.cfg:
-                import fsm
-                script = fsm._Container()
-                script.cmd = self.cfg['update']
-                #
-                # @todo check the script is really there
-                #
-                script.env = {'HASH': stamp, 'PODS': json.dumps(self.snapshot.values())}     
-                kontrol.actors['update'].tell({'request': 'invoke', 'script': script})
+            script = bag()
+            script.cmd = self.cfg['callback']
+            script.env = {'HASH': stamp, 'PODS': json.dumps(self.snapshot.values())}     
+            kontrol.actors['callback'].tell({'request': 'invoke', 'script': script})
                
         return 'watch', data, 1.0
 

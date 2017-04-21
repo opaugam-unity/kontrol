@@ -50,5 +50,5 @@ class Actor(FSM):
         logger.debug('%s : PUT /ping -> %s' % (self.path, url))
         resp = requests.put(url, data=json.dumps(state), headers={'Content-Type':'application/json'}, timeout=1.0)
         resp.raise_for_status()
-        logger.info('%s : HTTP %d <- PUT /ping %s' % (self.path, resp.status_code, url))            
+        logger.debug('%s : HTTP %d <- PUT /ping %s' % (self.path, resp.status_code, url))            
         return 'initial', data, 5.0

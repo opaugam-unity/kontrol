@@ -8,7 +8,6 @@ from kontrol.fsm import Aborted, FSM
 from subprocess import Popen, PIPE, STDOUT
 from threading import Thread
 
-
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
 
@@ -23,7 +22,7 @@ class Actor(FSM):
         self.cfg = cfg
         self.client = etcd.Client(host=cfg['etcd'], port=2379)
         self.fifo = deque()
-        self.path = 'hook actor'
+        self.path = 'callback actor'
 
     def reset(self, data):
 
@@ -51,16 +50,24 @@ class Actor(FSM):
         what = self.fifo[0]
         env = what.env
         try:
-            env['STATUS'] = self.client.read('/kontrol/%s/status' % self.cfg['labels']['app']).value
+            raw = self.client.read('/kontrol/%s/status' % self.cfg['labels']['app']).value
+            if raw:
+                env['STATUS'] = raw
         except EtcdKeyNotFound:
             pass
-        data.pid = Popen(what.cmd.split(' '),
-        close_fds=True,
-        bufsize=0,
-        cwd=self.cfg['scripts'],
-        env=env,
-        stderr=PIPE,
-        stdout=PIPE)
+        try:
+            data.pid = Popen(what.cmd.split(' '),
+            close_fds=True,
+            bufsize=0,
+            cwd=self.cfg['scripts'],
+            env=env,
+            stderr=PIPE,
+            stdout=PIPE)
+        except OSError:
+
+            logger.warning('%s : script "%s" could not be found (config bug ?)' % (self.path, what.cmd))   
+            self.fifo.popleft()
+            return 'initial', data, 0.0
 
         logger.debug('%s : invoking script "%s" (pid %s)' % (self.path, what.cmd, data.pid.pid))
         return 'wait_for_completion', data, 0.25
