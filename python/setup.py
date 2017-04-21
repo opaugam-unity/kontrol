@@ -15,7 +15,8 @@ setup(
     packages=find_packages(),
     install_requires=
     [
-        'pykka>=1.2.0'
+        'pykka>=1.2.0',
+        'python-etcd>=0.4.3'
     ],
     package_data={
         'kontrol':

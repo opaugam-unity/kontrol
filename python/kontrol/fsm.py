@@ -6,6 +6,7 @@ import traceback
 
 from pykka import ThreadingActor, ThreadingFuture, Timeout
 from pykka.exceptions import ActorDeadError
+from random import randint
 from threading import Event, Thread
 
 #: our pycse logger
@@ -105,7 +106,6 @@ def block_n(creators, strict=1, spin=0.5, collect=None):
 
     return out
 
-
 def shutdown(actor_ref, timeout=None):
     """
     Shuts a state-machine down and wait for it to acknowledge it's down using a latch.
@@ -123,7 +123,6 @@ def shutdown(actor_ref, timeout=None):
         actor_ref.tell({'request': 'shutdown', 'latch': latch})
         Event()
         latch.get(timeout=timeout)
-        logger.debug('shutdown actor %s' % actor_ref)
  
     except Timeout:
         pass
@@ -192,6 +191,8 @@ class FSM(ThreadingActor):
         self.path = '?'
         self.payload = _Container(copy.deepcopy(payload) if payload else {})
         self.terminate = 0
+        self.last_reset = time.time()
+        self.damper = 0
 
     def exitcode(self, code=None):
 
@@ -205,6 +206,7 @@ class FSM(ThreadingActor):
         #
         # - we're done, commit suicide
         #
+        logger.debug('%s : actor shutting down' % self.path)
         raise PoisonPill
 
     def reset(self, data):
@@ -291,6 +293,7 @@ class FSM(ThreadingActor):
         #
         if 'fsm' not in msg:
             try:
+                
                 #
                 # - not our internal state-switch message : run the specialized handler
                 # - make sure to return its outcome so that we can reply to other actors
@@ -305,6 +308,7 @@ class FSM(ThreadingActor):
             cmd = msg['fsm']
             try:
                 if self.dying:
+
                     #
                     # - skip if we're shutting down
                     #
@@ -356,6 +360,7 @@ class FSM(ThreadingActor):
                 data.cause = failure
                 data.previous = cmd['state']
                 data.diagnostic = str(failure)
+                logger.debug('%s : aborting -> (%s)' % (self.path, data.diagnostic))
                 self.actor_ref.tell({'fsm': {'state': 'reset', 'data': data}})
 
             except Exception as failure:
@@ -376,8 +381,33 @@ class FSM(ThreadingActor):
                     data.cause = failure
                     data.previous = cmd['state']
                     data.diagnostic = diagnostic(failure)
-                    logger.debug('%s : exception trapped -> (%s)' % (self.path, data.diagnostic))
-                    self.actor_ref.tell({'fsm': {'state': 'reset', 'data': data}})
+                    
+                    #
+                    # - check how long it's been since we last hit that situation
+                    # - compute a simple exponential backoff capped to 10 sec
+                    # - randomize it a bit
+                    # - this strategy is meant to avoid actors looping like crazy
+                    #
+                    now = time.time()
+                    lapse = now - self.last_reset
+                    self.damper = 0 if lapse > 10.0 else self.damper + 1
+                    ms = min(10000, (2 ** self.damper) + randint(0, 250))
+                    delay = ms * 0.001
+                    
+                    #
+                    # - revert back to the reset state after that delay
+                    #
+                    self.last_reset = now + delay
+                    logger.debug('%s : exception trapped -> (%s), reset in %2.1f' % (self.path, data.diagnostic, delay))
+                    payload = \
+                        {
+                            'fsm':
+                                {
+                                    'state': 'reset',
+                                    'data': data
+                                }
+                        }
+                    self.fire(payload, delay)
 
 
 class _Scheduled(Thread):

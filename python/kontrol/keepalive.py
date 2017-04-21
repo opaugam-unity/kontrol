@@ -1,8 +1,8 @@
+import json
 import logging
 import requests
 
 from kontrol.fsm import Aborted, FSM
-
 
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
@@ -10,14 +10,15 @@ logger = logging.getLogger('kontrol')
 class Actor(FSM):
 
     """
+    Actor emitting a periodic HTTP POST request against the controlling party. This enables us
+    to report relevant information about the pod.
     """
 
-    def __init__(self, url):
+    def __init__(self, cfg):
         super(Actor, self).__init__()
 
-        self.path = 'keepalive'
-        self.payload = {}
-        self.url = url
+        self.cfg = cfg
+        self.path = 'keepalive actor'
 
     def reset(self, data):
 
@@ -27,18 +28,27 @@ class Actor(FSM):
         return 'initial', data, 0.0
 
     def initial(self, data):
-        return 'ping', data, 0.0
-
-    def ping(self, data):
         
         if self.terminate:
             raise Aborted('resetting')
 
         #
-        # - send with the state payload
-        # - handle errors with exp. backoff
+        # - simply HTTP PUT our cfg with a 1 second timeout
+        # - default ping frequency is once every 5 seconds
+        # - please note any failure to post will be handled with exponential backoff by
+        #   the state-machine
         #
-        resp = requests.post(self.url, data=self.payload)
-        logger.info('http -> %s -> %s' % (self.url, resp.text))
-
-        return 'ping', data, 1.0
+        # @todo use TLS
+        #
+        assert 'controller' in self.cfg['labels'], 'invalid labels (bug?)'
+        url = 'http://%s:8000/ping' % self.cfg['labels']['controller']
+        state = \
+        {
+            'ip': self.cfg['ip'],
+            'labels': self.cfg['labels']
+        }
+        logger.debug('%s : PUT /ping -> %s' % (self.path, url))
+        resp = requests.put(url, data=json.dumps(state), headers={'Content-Type':'application/json'}, timeout=1.0)
+        resp.raise_for_status()
+        logger.info('%s : HTTP %d <- PUT /ping %s' % (self.path, resp.status_code, url))            
+        return 'initial', data, 5.0
