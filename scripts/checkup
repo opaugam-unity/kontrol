@@ -1,3 +1,0 @@
-#!/bin/sh
->&2 echo 'checking disk usage'
-df -H / | grep / | awk '{ printf "%d", $5}'

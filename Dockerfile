@@ -1,15 +1,13 @@
 FROM alpine:3.5
+WORKDIR /home/kontrol
 RUN apk add --no-cache openssl curl jq g++ make python2 python2-dev ca-certificates py2-pip && \
     adduser -D kontrol && \
-    mkdir kontrol && \
     chown kontrol /home/kontrol && \
-    pip install --upgrade pip shell supervisor cython gunicorn flask requests && \
-    apk del g++ make
-WORKDIR /home/kontrol
+    pip install --upgrade pip shell supervisor cython gunicorn flask requests
+
 COPY ./ ./
-RUN cd python && /usr/bin/python setup.py install
+RUN (cd code && /usr/bin/python setup.py install) && \
+    rm -rf code && \
+    apk del g++ make
 EXPOSE 8000
-ENV KONTROL_SCRIPTS=./scripts \
-    KONTROL_CALLBACK=monitor
-    
 ENTRYPOINT ["/usr/bin/supervisord","-n","-c","supervisord.conf"]

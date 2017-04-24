@@ -13,10 +13,11 @@ from kontrol.action import Actor as Action
 from kontrol.callback import Actor as Callback
 from kontrol.keepalive import Actor as KeepAlive
 from kontrol.leader import Actor as Leader
-from kontrol.state import Actor as State
+from kontrol.sequence import Actor as Sequence
 from os.path import dirname
 from pykka import ThreadingFuture, Timeout
 from signal import signal, SIGINT, SIGQUIT, SIGTERM
+
 
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
@@ -27,16 +28,17 @@ http = Flask('kontrol')
 #: simple trigger which will fail any request to GET /health
 terminating = False
 
+
 @http.route('/ping', methods=['PUT'])
 def _ping():
 
     #
     # - PUT /ping (e.g keepalive updates from supervised containers)
-    # - post to the state actor
+    # - post to the sequence actor
     #
     js = request.get_json(silent=True, force=True)
     logger.debug('PUT /ping <- keepalive from %s' % js['ip'] )
-    kontrol.actors['state'].tell({'request': 'update', 'state': js})
+    kontrol.actors['sequence'].tell({'request': 'update', 'state': js})
     return '', 200
 
 
@@ -83,65 +85,72 @@ def up():
         #
         # - grep the env. variables we need
         # - anything prefixed by KONTROL_ will be kept around
-        # - $KONTROL_SCRIPTS and $KONTROL_CALLBACKS are defaulted
+        # - $KONTROL_MODE is a comma separated list of tokens used to define
+        #   the operation mode (e.g slave,debug)
         #
+        stubs = []
         keys = [key for key in os.environ if key.startswith('KONTROL_')]            
-        js = \
-        {
-            'scripts': './scripts',
-            'callback': 'monitor'
-        }
-        
+        js = {key[8:].lower():_try(key) for key in keys}
+        logger.info('$KONTROL_* defined: %s' % ','.join(keys))
+        assert all(key in js for key in ['etcd', 'ip', 'labels', 'mode']), '1+ environment variables missing'
+        tokens = set(js['mode'].split(','))
+        assert all(key in ['slave', 'master', 'debug', 'verbose'] for key in tokens), 'invalid $KONTROL_MODE value'
+
         #
-        # - if $KONTROL_DEBUG is set to "TRUE" switch debug/local mode on
+        # - if $KONTROL_MODE contains "debug" switch the debug/local mode on
         # - this will force etcd and the local http/rest endpoint to be either
         #   127.0.0.1 or whateer $KONTROL_HOST is set at
         # - if you want to test drive your container locally alias lo0 to some
         #   ip (e.g sudo ifconfig lo0 alias <ip>)
         # - then docker run as follow:
-        #     docker run -e KONTROL_DEBUG=TRUE -e KONTROL_HOST=<ip> -p 8000:8000 <image>
+        #     docker run -e KONTROL_MODE=verbose,debug -e KONTROL_HOST=<ip> -p 8000:8000 <image>
         #
-        js.update({key[8:].lower():_try(key) for key in keys})
-        if 'debug' in js and js['debug'] == 'TRUE':
+        if 'verbose' in tokens:
             logger.setLevel(DEBUG)
+
+        if 'debug' in tokens:
+            tokens |= set(['master', 'slave'])
             ip = js['host'] if 'host' in js else '127.0.0.1'
             logger.debug('switching debug mode on (host ip @ %s)' % ip)
             overrides = \
             {
                 'etcd': ip,
                 'ip': ip,
-                'tag': 'local',
-                'labels': {'app':'local', 'controller': ip}
+                'mode': 'mixed',
+                'labels': {'app':'local', 'role': 'test', 'master': ip}
             }
             js.update(overrides)
         
         #
-        # - we rely on the <app> label to identify ourselves (the pod identifier, e.g <tag>
-        #   is hard to use for instance when running in a deployment)
+        # -
         #
-        logger.debug('env vars available: %s' % ','.join(keys))
-        assert 'app' in js['labels'], 'kontrol requires the "app" label to be defined'
+        if 'slave' in tokens:
+            stubs += [KeepAlive]
         
         #
         # -
         #
-        if 'controller' in js['labels']:
-           kontrol.actors['keepalive'] = KeepAlive.start(js)
+        if 'master' in tokens:
+            stubs += [Action, Callback, Leader, Sequence]
 
-        kontrol.actors['action'] = Action.start(js)
-        kontrol.actors['callback'] = Callback.start(js)   
-        kontrol.actors['leader'] = Leader.start(js)
-        kontrol.actors['state'] = State.start(js)
-
+        #
+        # - start our various actors
+        # - we rely on the "app" label to identify the pod
+        # - the "role" label is also used when sending keepalive updates
+        #
+        assert all(key in js['labels'] for key in ['app', 'role']), '1+ labels missing'
+        for stub in stubs:
+            logger.debug('starting actor <%s>' % stub.tag)
+            kontrol.actors[stub.tag] = stub.start(js)
+    
     except Exception as failure:
 
         #
-        # - bad, probably some missing env. variable
+        # - bad, probably some missing environment variables
         # - abort the worker
         #
         why = fsm.diagnostic(failure)
         logger.error('top level failure -> %s' % why)
-        sys.exit(1)
 
 def down():
 

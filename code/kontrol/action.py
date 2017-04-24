@@ -1,12 +1,10 @@
-import etcd
 import json
 import logging
 
 from collections import deque
-from etcd import EtcdKeyNotFound
 from kontrol.fsm import Aborted, FSM
 from subprocess import Popen, PIPE, STDOUT
-from threading import Thread
+from threading import Event, Thread
 
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
@@ -14,15 +12,23 @@ logger = logging.getLogger('kontrol')
 class Actor(FSM):
 
     """
+    Actor in charge of invoking an arbitrary command sent by the controller. The
+    sub-process stdout is piped back into the HTTP response. The controller is
+    free to include free-form json data in its request. This json will be passed
+    down as the $INPUT environment variable.
+
+    @todo add some authentication mechanism to make sure the request is not forged
+    #todo anything to do to secure/sandbox/limit what the controller can request ?
     """
 
+    tag = 'action'
+    
     def __init__(self, cfg):
         super(Actor, self).__init__()
 
         self.cfg = cfg
-        self.client = etcd.Client(host=cfg['etcd'], port=2379)
         self.fifo = deque()
-        self.path = 'callback actor'
+        self.path = '%s actor' % self.tag
 
     def reset(self, data):
 
@@ -48,26 +54,14 @@ class Actor(FSM):
         # - this thread will go down automatically when the sub-process does
         #
         what = self.fifo[0]
+        data.latch = what.latch
         env = what.env
-        try:
-            raw = self.client.read('/kontrol/%s/status' % self.cfg['labels']['app']).value
-            if raw:
-                env['STATUS'] = raw
-        except EtcdKeyNotFound:
-            pass
-        try:
-            data.pid = Popen(what.cmd.split(' '),
-            close_fds=True,
-            bufsize=0,
-            cwd=self.cfg['scripts'],
-            env=env,
-            stderr=PIPE,
-            stdout=PIPE)
-        except OSError:
-
-            logger.warning('%s : script "%s" could not be found (config bug ?)' % (self.path, what.cmd))   
-            self.fifo.popleft()
-            return 'initial', data, 0.0
+        data.pid = Popen(what.cmd.split(' '),
+        close_fds=True,
+        bufsize=0,
+        env=env,
+        stderr=PIPE,
+        stdout=PIPE)
 
         logger.debug('%s : invoking script "%s" (pid %s)' % (self.path, what.cmd, data.pid.pid))
         return 'wait_for_completion', data, 0.25
@@ -82,15 +76,12 @@ class Actor(FSM):
             code = data.pid.returncode
             err = [line.rstrip('\n') for line in iter(data.pid.stderr.readline, b'')]
             logger.info('%s : pid %s (exit %d) ->\n  . %s' % (self.path, data.pid.pid, code, '\n  . '.join(err)))
-            
+
             #
-            # - attempt to parse stdout into a json object
-            #
-            try:
-                out = [line.rstrip('\n') for line in iter(data.pid.stdout.readline, b'')]
-                self.client.write('/kontrol/%s/status' % self.cfg['labels']['app'], ''.join(out))
-            except ValueError:
-                pass
+            # -
+            #  
+            data.latch.set(''.join([line.rstrip('\n') for line in iter(data.pid.stdout.readline, b'')]))
+            Event()
 
             #
             # - dequeue the FIFO

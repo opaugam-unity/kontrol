@@ -10,22 +10,26 @@ import time
 from kontrol import bag
 from kontrol.fsm import Aborted, FSM
 
+
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
+
 
 class Actor(FSM):
 
     """
     """
 
+    tag = 'leader'
+
     def __init__(self, cfg):
         super(Actor, self).__init__()
 
         self.cfg = cfg
         self.client = etcd.Client(host=cfg['etcd'], port=2379)
-        self.path = 'leader actor'
+        self.path = '%s actor' % self.tag
         self.snapshot = {}
-        self.stamp = None
+        self.md5 = None
 
     def reset(self, data):
 
@@ -62,9 +66,12 @@ class Actor(FSM):
             raise Aborted('resetting')
 
         #
-        # -
+        # - make sure we refresh our lock key
+        # - a failure means we lagged too much and the key timed out
         #
-        if not self.client.refresh(data.lock, ttl=10):
+        try:
+            self.client.refresh(data.lock, ttl=10)
+        except EtcdKeyNotFound:
             raise Aborted('lost key %s (excessive lag ?)' % data.lock.key)
 
         #
@@ -87,52 +94,59 @@ class Actor(FSM):
             raise Aborted('resetting')
         
         #
-        # -
+        # - make sure we refresh our lock key
+        # - a failure means we lagged too much and the key timed out
         #
-        if not self.client.refresh(data.lock, ttl=10):
+        try:
+            self.client.refresh(data.lock, ttl=10)
+        except EtcdKeyNotFound:
             raise Aborted('lost key %s (excessive lag ?)' % data.lock.key)
 
         #
         # - grab the latest snapshot of our reporting pods
-        # - compute the MD5 digest for the corresponding json payload
+        # - order by the sequence index generated in state.py
+        # - compute the corresponding MD5 digest
         # - compare against our last hash
         #
         # @todo can we possibly use a watch and/or track indices?
         #
-        pods = self.client.read('/kontrol/%s/pods' % self.cfg['labels']['app'], recursive=True)
-        self.snapshot = {item.key:json.loads(item.value) for item in pods.leaves if item.value}
         hashed = hashlib.md5()
-        hashed.update(json.dumps(sorted(self.snapshot.items())))
-        stamp = ':'.join(c.encode('hex') for c in hashed.digest())
-
+        raw = self.client.read('/kontrol/%s/pods' % self.cfg['labels']['app'], recursive=True)
+        pods = [json.loads(item.value) for item in raw.leaves if item.value]
+        self.snapshot = sorted(pods, key=lambda pod: pod['seq'])
+        hashed.update(json.dumps(self.snapshot))
+        md5 = ':'.join(c.encode('hex') for c in hashed.digest())
+        
         #
-        # - 
+        # - compare the new digest against the last one
+        # - if they differ trigger a callback after a cool-down period
         #
         now = time.time()
-        if stamp != self.stamp:
+        if md5 != self.md5:
             data.dirty = True
-            self.stamp = stamp
+            self.md5 = md5
             data.trigger = now + 0.0
             logger.debug('%s : change detected, script invokation in 10 s' % self.path)
 
         if data.dirty and now > data.trigger:
                         
             #
-            # -
+            # - reset the trigger
+            # - package the $PODS and $MD5 environment variables
+            # - post to the update actor if $KONTROL_CALLBACK is defined
+            # - the $STATE variable will be added by the callback actor
             #
             data.dirty = False
-            logger.info('%s : change detected (%d pods), MD5 -> ...%s' % (self.path, len(self.snapshot), stamp[-12:]))
-            self.client.write('/kontrol/%s/stamp' % self.cfg['labels']['app'], stamp)
- 
-            #
-            # - package the $POD and $HASH env. variables
-            # - post to the update actor
-            # - $STATUS will be added by the actor
-            #
-            script = bag()
-            script.cmd = self.cfg['callback']
-            script.env = {'HASH': stamp, 'PODS': json.dumps(self.snapshot.values())}     
-            kontrol.actors['callback'].tell({'request': 'invoke', 'script': script})
+            logger.debug('%s : invoking callback, MD5 digest -> %s' % (self.path, md5))
+            self.client.write('/kontrol/%s/md5' % self.cfg['labels']['app'], md5)
+            if 'callback' in self.cfg:
+                script = bag()
+                script.cmd = self.cfg['callback']
+                script.env = {'MD5': md5, 'PODS': json.dumps(self.snapshot)}     
+                kontrol.actors['callback'].tell({'request': 'invoke', 'script': script})
+         
+            else:
+                logger.warning('%s: $KONTROL_CALLBACK is not set (user error ?)' % self.path)
                
         return 'watch', data, 1.0
 

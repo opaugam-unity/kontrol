@@ -3,17 +3,22 @@ BEARER_TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
 TOKEN="$(cat $BEARER_TOKEN_PATH)"
 URL=https://$KUBERNETES_SERVICE_HOST/api/v1/namespaces/default/pods/$HOSTNAME
 POD=$(curl $URL --insecure --header "Authorization: Bearer $TOKEN")
-export KONTROL_IP=$(echo $POD | jq -r '.status.podIP')
+HOST=$(echo $POD | jq -r '.status.hostIP')
 
 #
-# - right now the assumption is that each etcd2 proxy listens on 0.0.0.0
-#   so that we can reach it from within the pod
+# - set $KONTROL_ETCD, $KONTROL_IP, $KONTROL_LABELS and $KONTROL_MODE
+# - default $KONTROL_MODE to slave
+# - default $KONTROL_ETCD to the docker host (right now the assumption
+#   is that each etcd2 proxy listens on 0.0.0.0 so that we can reach it
+#   from within the pod)
 #
 # @todo how will we implement key isolation and/or authorization ?
 #
-export KONTROL_ETCD=$(echo $POD | jq -r '.status.hostIP')
+export KONTROL_ETCD=${KONTROL_ETCD:=$HOST}
+export KONTROL_IP=$(echo $POD | jq -r '.status.podIP')
 export KONTROL_LABELS=$(echo $POD | jq -r '.metadata.labels')
-export KONTROL_TAG=$(echo $POD | jq -r '.metadata.name')
+export KONTROL_LOG=${KONTROL_LOG:=debug}
+export KONTROL_MODE=${KONTROL_MODE:=slave}
 
 #
 # - set the same graceful shutdown timeout as what supervisord uses
