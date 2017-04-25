@@ -1,0 +1,188 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Configuration &#8212; kontrol 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/flasky.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Introduction" href="intro.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9">
+
+  </head>
+  <body role="document">
+  
+  
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="intro.html" title="Introduction"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">kontrol 1.0 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="setup">
+<h2>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h2>
+<p>Kontrol is run via its own <a class="reference external" href="https://www.docker.com/">Docker</a> container. You can include it in your own pod manifests.</p>
+</div>
+<div class="section" id="environment-variables">
+<h2>Environment variables<a class="headerlink" href="#environment-variables" title="Permalink to this headline">¶</a></h2>
+<p>Kontrol is configured via a few environments variables. Those are mostly defaulted based on what
+the <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> pod provides. A few can be specified in the manifest.</p>
+<ul class="simple">
+<li><strong>$KONTROL_HOST</strong>: IPv4 address for the kube proxy (defaulted).</li>
+<li><strong>$KONTROL_IP</strong>: IPv4 address for the pod (defaulted).</li>
+<li><strong>$KONTROL_ETCD</strong>: IPv4 address for a <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy (defaulted).</li>
+<li><strong>$KONTROL_LABELS</strong>: pod&#8217;s label dictionary (defaulted).</li>
+<li><strong>$KONTROL_MODE</strong>: pod operating mode, see below (defaulted).</li>
+<li><strong>$KONTROL_CALLBACK</strong>: executable to run upon callback.</li>
+</ul>
+</div>
+<div class="section" id="operating-mode">
+<h2>Operating mode<a class="headerlink" href="#operating-mode" title="Permalink to this headline">¶</a></h2>
+<p>Kontrol can run in different modes. The <strong>$KONTROL_MODE</strong> variable is a comma separated list of tokens
+indicating what underlying actors to run. Valid token values include <em>slave</em>, <em>master</em>, <em>debug</em> and <em>verbose</em>.
+The default value is set to <em>slave</em> meaning that Kontrol will just attempt to report keepalive messages.
+Specifying <em>master</em> will enable receiving keepalives and tracking the MD5 digest. Please note you can
+specify both <em>master</em> and <em>slave</em> at the same time.</p>
+<p>The <em>verbose</em> token will turn debug logs on. Those are piped to the container standard output.</p>
+<p>Adding <em>debug</em> will allow to run in local debugging mode. In that case <em>slave</em> and <em>master</em> will be added
+as well and <strong>$KONTROL_HOST</strong> used for both the pod IPv4 and <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a>. In other words you can run a self contained
+master/slave instance of your Kontrol image by doing:</p>
+<div class="highlight-shell"><div class="highlight"><pre><span></span>$ sudo ifconfig lo0 <span class="nb">alias</span> <span class="m">172</span>.16.123.1
+$ docker run -e <span class="nv">KONTROL_MODE</span><span class="o">=</span>debug -e <span class="nv">KONTROL_HOST</span><span class="o">=</span><span class="m">172</span>.16.123.1 -p <span class="m">8000</span>:8000 &lt;image&gt;
+</pre></div>
+</div>
+<p>Please note this assumes you have a local <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> running on your local host.</p>
+</div>
+<div class="section" id="etcd">
+<h2>Etcd<a class="headerlink" href="#etcd" title="Permalink to this headline">¶</a></h2>
+<p>The <strong>$KONTROL_ETCD</strong> variable is defaulted to the kube proxy IPv4. This assumes the <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy running in there
+is listening on all interfaces. If you want to use a dedicated <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy you can override this variable.</p>
+</div>
+<div class="section" id="callback">
+<h2>Callback<a class="headerlink" href="#callback" title="Permalink to this headline">¶</a></h2>
+<p>Kontrol will periodically run a user-defined callback whenever a change is detected. This callback is an
+arbitrary command you can specify via the <strong>$KONTROL_CALLBACK</strong> variable. This subprocess is tracked and its
+standard error and output piped back.</p>
+<p>The callback sub-process will be passed 3 environment variables:</p>
+<ul class="simple">
+<li><strong>$HASH</strong>: latest MD5 digest.</li>
+<li><strong>$PODS</strong>: ordered list of pods as a JSON array.</li>
+<li><strong>$STATE</strong>: optional user-data.</li>
+</ul>
+<p>the <strong>$PODS</strong> variable contains a snapshot of the current pod ensemble. It is passed as a serialized JSON
+array whose entries are consistently ordered.</p>
+<p>For instance the following <a class="reference external" href="https://www.python.org/">Python</a> callback will display the IPv4 address assigned to each pod:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/python</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">json</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Trivial callback example enumerating pods.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="c1">#</span>
+    <span class="c1"># - fetch the current pod snapshot via $POD</span>
+    <span class="c1"># - $POD is guaranteed to be always available</span>
+    <span class="c1">#</span>
+    <span class="n">pods</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;PODS&#39;</span><span class="p">])</span>
+
+    <span class="c1">#</span>
+    <span class="c1"># - display our pods on stderr</span>
+    <span class="c1"># - $POD is guaranteed to contain consistenly ordered pod information</span>
+    <span class="c1">#</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s1">&#39;monitoring </span><span class="si">%s</span><span class="s1"> pods&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">pods</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">pod</span> <span class="ow">in</span> <span class="n">pods</span><span class="p">:</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s1">&#39; - #</span><span class="si">%d</span><span class="s1"> (</span><span class="si">%s</span><span class="s1">) -&gt; </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">pod</span><span class="p">[</span><span class="s1">&#39;seq&#39;</span><span class="p">],</span> <span class="n">pod</span><span class="p">[</span><span class="s1">&#39;uuid&#39;</span><span class="p">],</span> <span class="n">pod</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/unity-logo.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Configuration</a><ul>
+<li><a class="reference internal" href="#setup">Setup</a></li>
+<li><a class="reference internal" href="#environment-variables">Environment variables</a></li>
+<li><a class="reference internal" href="#operating-mode">Operating mode</a></li>
+<li><a class="reference internal" href="#etcd">Etcd</a></li>
+<li><a class="reference internal" href="#callback">Callback</a></li>
+</ul>
+</li>
+</ul>
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="intro.html" title="previous chapter">Introduction</a></li>
+  </ul></li>
+</ul>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+  <div class="footer">
+    &copy; Copyright 2017, Unity Technologies.
+    Created using <a href="http://sphinx.pocoo.org/">Sphinx</a>.
+  </div>
+  
+  </body>
+</html>

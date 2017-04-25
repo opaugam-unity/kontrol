@@ -26,6 +26,7 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Configuration" href="configuration.html" />
     <link rel="prev" title="Overview" href="index.html" />
    
   
@@ -43,6 +44,9 @@
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
+          <a href="configuration.html" title="Configuration"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
           <a href="index.html" title="Overview"
              accesskey="P">previous</a> |</li>
         <li class="nav-item nav-item-0"><a href="index.html">kontrol 1.0 documentation</a> &#187;</li> 
@@ -59,20 +63,51 @@
 <div class="section" id="overview">
 <h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
 <p>Kontrol is a small <a class="reference external" href="https://www.python.org/">Python</a> package which implements a REST/HTTP endpoint plus a set of
-<a class="reference external" href="https://github.com/jodal/pykka/">Pykka</a> state-machines. It can be used to report periodic keepalive messages and aggregate
-them in <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a>.</p>
+<a class="reference external" href="https://github.com/jodal/pykka/">Pykka</a> state-machines. It is used to report periodic keepalive messages from a set of
+pods and aggregate them in <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a>.</p>
+<div class="figure align-center">
+<a class="reference internal image-reference" href="_images/overview.png"><img alt="_images/overview.png" src="_images/overview.png" style="width: 90%;" /></a>
+</div>
+<p>The goal is to detect any change within this set of pods and react to it via a user-defined
+callback. This callback is provided the ordered list of all participating pods with details
+such as their IPv4 address and so on.</p>
+<p>Kontrol is designed to address a few common use cases: passive monitoring and alerting,
+distributed configuration or self-healing. You can use it in various topologies: separate
+master &amp; slave tiers, mixed mode (e.g self-managing pod ensemble) or even setup a chain of
+masters (e.g monitoring the monitor).</p>
+</div>
+<div class="section" id="system-design">
+<h2>System design<a class="headerlink" href="#system-design" title="Permalink to this headline">¶</a></h2>
 <p>Kontrol operates in either slave, master or mixed mode. A <strong>slave</strong> will periodically emit a
 keepalive payload to its <strong>master</strong> tier. This payload include information about the pod itself
 plus some optional user-data. The masters will receive those keepalives and maintain a MD5 digest
 reflecting the overall ensemble state. Any time this digest changes for whatever reason a
-user defined callback is executed. The masters are HA and will fail-over in case of problem.
-Any master can receive keepalives but only one at any given is in charge of tracking the digest
-and executing the callback.</p>
+user defined callback is executed. The masters are HA and will fail-over in case of problem. They
+are typically run via a <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> deployment fronted by a service. Any master can receive
+keepalives but only one at any given is in charge of tracking the digest and executing the callback.</p>
+<p>All the locking, leader election and persistence is done 100% in <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a>.</p>
 <div class="figure align-center">
 <a class="reference internal image-reference" href="_images/schematic.png"><img alt="_images/schematic.png" src="_images/schematic.png" style="width: 90%;" /></a>
 </div>
 <p>Please note you can run in both <strong>master</strong>/<strong>slave</strong> meaning the same pod deployment can run its
 own monitoring logic.</p>
+</div>
+<div class="section" id="pod-ordering">
+<h2>Pod ordering<a class="headerlink" href="#pod-ordering" title="Permalink to this headline">¶</a></h2>
+<p>It is crucial to keep consistent ordering for the pods that are monitored. Kontrol does it by first
+identifying pods using their base 62 shortened <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> IPv4 address. A monotonic integer sequence
+is also assigned to each pod the first time they emit a keepalive. This sequence counter is then
+persisted as long as the pod is alive.</p>
+</div>
+<div class="section" id="action-reaction">
+<h2>Action/Reaction<a class="headerlink" href="#action-reaction" title="Permalink to this headline">¶</a></h2>
+<p>Kontrol also allows slaves to execute arbitrary commands on behalf of the master. This mechanism
+is the primary way to actively control your pod ensemble. Those commands are run by the <em>kontrol</em>
+user and anything written to the standard output is sent back to the master.</p>
+<p>It is also important to note that the callback has the ability to persist its own user-data across
+multiple invokations. This is critical to maintain consistent runtime information describing how
+the overall system is evolving. A typical use-case would be to assign and track custom ids or to
+be able to re-assign existing data to new pods.</p>
 </div>
 </div>
 
@@ -89,6 +124,9 @@ own monitoring logic.</p>
   <ul>
 <li><a class="reference internal" href="#">Introduction</a><ul>
 <li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#system-design">System design</a></li>
+<li><a class="reference internal" href="#pod-ordering">Pod ordering</a></li>
+<li><a class="reference internal" href="#action-reaction">Action/Reaction</a></li>
 </ul>
 </li>
 </ul>
@@ -96,6 +134,7 @@ own monitoring logic.</p>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
       <li>Previous: <a href="index.html" title="previous chapter">Overview</a></li>
+      <li>Next: <a href="configuration.html" title="next chapter">Configuration</a></li>
   </ul></li>
 </ul>
 <div id="searchbox" style="display: none" role="search">
