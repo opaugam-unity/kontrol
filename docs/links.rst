@@ -6,3 +6,4 @@
 .. _Zookeeper: http://zookeeper.apache.org/
 .. _Docker: https://www.docker.com/
 .. _Etcd: https://github.com/coreos/etcd/
+.. _Supervisord: http://supervisord.org/

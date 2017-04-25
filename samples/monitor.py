@@ -21,6 +21,6 @@ if __name__ == '__main__':
     # - $POD is guaranteed to contain consistenly ordered pod information
     #
     print >> sys.stderr, 'monitoring %s pods' % len(pods)
-    for pod in sorted(pods, key=lambda pod:pod['seq']):
+    for pod in pods:
         print >> sys.stderr, ' - #%d (%s) -> %s' % (pod['seq'], pod['uuid'], pod['ip'])
       
