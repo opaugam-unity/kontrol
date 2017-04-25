@@ -36,10 +36,14 @@ def _ping():
     # - PUT /ping (e.g keepalive updates from supervised containers)
     # - post to the sequence actor
     #
-    js = request.get_json(silent=True, force=True)
-    logger.debug('PUT /ping <- keepalive from %s' % js['ip'] )
-    kontrol.actors['sequence'].tell({'request': 'update', 'state': js})
-    return '', 200
+    try:
+        js = request.get_json(silent=True, force=True)
+        logger.debug('PUT /ping <- keepalive from %s' % js['ip'] )
+        kontrol.actors['sequence'].tell({'request': 'update', 'state': js})
+        return '', 200
+
+    except Exception:
+        return '', 500
 
 
 @http.route('/action/<key>', methods=['PUT'])
@@ -50,14 +54,17 @@ def _action(key):
     # - post it to the action actor
     # - block on a latch and reply
     #
-    script = bag()
-    script.cmd = key
-    script.env = {'INPUT': request.data}
-    script.latch = ThreadingFuture()     
-    logger.debug('PUT /action <- invoking "%s"' % key)
-    kontrol.actors['action'].tell({'request': 'invoke', 'script': script})
-    return script.latch.get(timeout=5), 200
-
+    try:
+        script = bag()
+        script.cmd = key
+        script.env = {'INPUT': request.data}
+        script.latch = ThreadingFuture()     
+        logger.debug('PUT /action <- invoking "%s"' % key)
+        kontrol.actors['action'].tell({'request': 'invoke', 'script': script})
+        return script.latch.get(timeout=5), 200
+        
+    except Exception:
+        return '', 500
 
 def up():
     
