@@ -1,10 +1,6 @@
 Configuration
 =============
 
-Setup
-_____
-
-Kontrol is run via its own Docker_ container. You can include it in your own pod manifests.
 
 Environment variables
 _____________________
@@ -17,8 +13,11 @@ the Kubernetes_ pod provides. A few can be specified in the manifest.
 - **$KONTROL_ETCD**: IPv4 address for a Etcd_ proxy (defaulted).
 - **$KONTROL_LABELS**: pod's label dictionary (defaulted).
 - **$KONTROL_MODE**: pod operating mode, see below (defaulted).
-- **$KONTROL_CALLBACK**: executable to run upon callback.
- 
+- **$KONTROL_CALLBACK**: executable to run upon callback (optional).
+- **$KONTROL_PAYLOAD**: local json file on disk to add to the keepalives (optional).
+
+The labels are picked for you from the Kubernetes_ pod metadata. However you **must** at least
+define the **app* and **role** labels as they are used by Kontrol.
 
 Operating mode
 ______________
@@ -40,7 +39,7 @@ master/slave instance of your Kontrol image by doing:
     $ sudo ifconfig lo0 alias 172.16.123.1
     $ docker run -e KONTROL_MODE=debug -e KONTROL_HOST=172.16.123.1 -p 8000:8000 <image>
 
-Please note this assumes you have a local Etcd_ running on your local host.
+Please note this assumes you have a local Etcd_ running on your local host and listening on all interfaces.
 
 
 Etcd
@@ -50,12 +49,23 @@ The **$KONTROL_ETCD** variable is defaulted to the kube proxy IPv4. This assumes
 is listening on all interfaces. If you want to use a dedicated Etcd_ proxy you can override this variable.
 
 
+Pod payload 
+___________
+
+Slaves have the ability to include arbirary json payload in their keepalives. Simply set the **$KONTROL_PAYLOAD**
+variable to point to a file on disk containing valid serialized JSON. This content will be parsed and included
+in the keepalive request.
+
+If the variable is not set or if the file does not exist or contains invalid JSON this process will be skipped.
+
+
 Callback
 ________
 
 Kontrol will periodically run a user-defined callback whenever a change is detected. This callback is an
 arbitrary command you can specify via the **$KONTROL_CALLBACK** variable. This subprocess is tracked and its
-standard error and output piped back.
+standard error and output piped back. It does not have to be a shell or Python_ script or anything
+specific for that matter. The only requirement is to have it set to a valid command.
 
 The callback sub-process will be passed 3 environment variables:
 
@@ -63,10 +73,27 @@ The callback sub-process will be passed 3 environment variables:
 - **$PODS**: ordered list of pods as a JSON array.
 - **$STATE**: optional user-data.
 
-the **$PODS** variable contains a snapshot of the current pod ensemble. It is passed as a serialized JSON
-array whose entries are consistently ordered.
+The **$PODS** variable contains a snapshot of the current pod ensemble. It is passed as a serialized JSON
+array whose entries are consistently ordered. Anything written on the standard output is assumed to be
+valid JSON syntax, will be persisted in Etcd_ and passed back upon the next invokation as the **$STATE**
+variable.
 
-For instance the following Python_ callback will display the IPv4 address assigned to each pod:
+Each entry in the **$POD** array is a small dict containing a few fields. For instance:
+
+.. code-block:: json
+
+    {
+        "ip": 172.16.123.1
+        "seq": 3
+        "uuid": "redis-39mysN"
+        "role": "redis"
+        "payload": {"some": "stuff"}
+    }
+
+The UUID and sequence counter are guaranteed to be unique amongst all the monitored pods. The payload field is
+optional and set if the slaves have **$KONTROL_PAYLOAD** set.
+
+The following Python_ callback script will for instance display the UUID and IPv4 address assigned to each pod:
 
 .. code-block:: python
 
@@ -76,25 +103,10 @@ For instance the following Python_ callback will display the IPv4 address assign
     import sys
     import json
 
-    """
-    Trivial callback example enumerating pods.
-    """
-
     if __name__ == '__main__':
 
-        #
-        # - fetch the current pod snapshot via $POD
-        # - $POD is guaranteed to be always available
-        #
-        pods = json.loads(os.environ['PODS'])
-
-        #
-        # - display our pods on stderr
-        # - $POD is guaranteed to contain consistenly ordered pod information
-        #
-        print >> sys.stderr, 'monitoring %s pods' % len(pods)
-        for pod in pods:
+        for pod in json.loads(os.environ['PODS']):
             print >> sys.stderr, ' - #%d (%s) -> %s' % (pod['seq'], pod['uuid'], pod['ip'])
-        
+
 
 .. include:: links.rst

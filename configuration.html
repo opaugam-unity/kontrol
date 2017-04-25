@@ -56,10 +56,6 @@
             
   <div class="section" id="configuration">
 <h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="setup">
-<h2>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h2>
-<p>Kontrol is run via its own <a class="reference external" href="https://www.docker.com/">Docker</a> container. You can include it in your own pod manifests.</p>
-</div>
 <div class="section" id="environment-variables">
 <h2>Environment variables<a class="headerlink" href="#environment-variables" title="Permalink to this headline">¶</a></h2>
 <p>Kontrol is configured via a few environments variables. Those are mostly defaulted based on what
@@ -70,8 +66,11 @@ the <a class="reference external" href="https://github.com/GoogleCloudPlatform/k
 <li><strong>$KONTROL_ETCD</strong>: IPv4 address for a <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy (defaulted).</li>
 <li><strong>$KONTROL_LABELS</strong>: pod&#8217;s label dictionary (defaulted).</li>
 <li><strong>$KONTROL_MODE</strong>: pod operating mode, see below (defaulted).</li>
-<li><strong>$KONTROL_CALLBACK</strong>: executable to run upon callback.</li>
+<li><strong>$KONTROL_CALLBACK</strong>: executable to run upon callback (optional).</li>
+<li><strong>$KONTROL_PAYLOAD</strong>: local json file on disk to add to the keepalives (optional).</li>
 </ul>
+<p>The labels are picked for you from the <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> pod metadata. However you <strong>must</strong> at least
+define the <strong>app* and **role</strong> labels as they are used by Kontrol.</p>
 </div>
 <div class="section" id="operating-mode">
 <h2>Operating mode<a class="headerlink" href="#operating-mode" title="Permalink to this headline">¶</a></h2>
@@ -88,51 +87,58 @@ master/slave instance of your Kontrol image by doing:</p>
 $ docker run -e <span class="nv">KONTROL_MODE</span><span class="o">=</span>debug -e <span class="nv">KONTROL_HOST</span><span class="o">=</span><span class="m">172</span>.16.123.1 -p <span class="m">8000</span>:8000 &lt;image&gt;
 </pre></div>
 </div>
-<p>Please note this assumes you have a local <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> running on your local host.</p>
+<p>Please note this assumes you have a local <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> running on your local host and listening on all interfaces.</p>
 </div>
 <div class="section" id="etcd">
 <h2>Etcd<a class="headerlink" href="#etcd" title="Permalink to this headline">¶</a></h2>
 <p>The <strong>$KONTROL_ETCD</strong> variable is defaulted to the kube proxy IPv4. This assumes the <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy running in there
 is listening on all interfaces. If you want to use a dedicated <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> proxy you can override this variable.</p>
 </div>
+<div class="section" id="pod-payload">
+<h2>Pod payload<a class="headerlink" href="#pod-payload" title="Permalink to this headline">¶</a></h2>
+<p>Slaves have the ability to include arbirary json payload in their keepalives. Simply set the <strong>$KONTROL_PAYLOAD</strong>
+variable to point to a file on disk containing valid serialized JSON. This content will be parsed and included
+in the keepalive request.</p>
+<p>If the variable is not set or if the file does not exist or contains invalid JSON this process will be skipped.</p>
+</div>
 <div class="section" id="callback">
 <h2>Callback<a class="headerlink" href="#callback" title="Permalink to this headline">¶</a></h2>
 <p>Kontrol will periodically run a user-defined callback whenever a change is detected. This callback is an
 arbitrary command you can specify via the <strong>$KONTROL_CALLBACK</strong> variable. This subprocess is tracked and its
-standard error and output piped back.</p>
+standard error and output piped back. It does not have to be a shell or <a class="reference external" href="https://www.python.org/">Python</a> script or anything
+specific for that matter. The only requirement is to have it set to a valid command.</p>
 <p>The callback sub-process will be passed 3 environment variables:</p>
 <ul class="simple">
 <li><strong>$HASH</strong>: latest MD5 digest.</li>
 <li><strong>$PODS</strong>: ordered list of pods as a JSON array.</li>
 <li><strong>$STATE</strong>: optional user-data.</li>
 </ul>
-<p>the <strong>$PODS</strong> variable contains a snapshot of the current pod ensemble. It is passed as a serialized JSON
-array whose entries are consistently ordered.</p>
-<p>For instance the following <a class="reference external" href="https://www.python.org/">Python</a> callback will display the IPv4 address assigned to each pod:</p>
+<p>The <strong>$PODS</strong> variable contains a snapshot of the current pod ensemble. It is passed as a serialized JSON
+array whose entries are consistently ordered. Anything written on the standard output is assumed to be
+valid JSON syntax, will be persisted in <a class="reference external" href="https://github.com/coreos/etcd/">Etcd</a> and passed back upon the next invokation as the <strong>$STATE</strong>
+variable.</p>
+<p>Each entry in the <strong>$POD</strong> array is a small dict containing a few fields. For instance:</p>
+<div class="highlight-json"><div class="highlight"><pre><span></span>{
+    &quot;ip&quot;: 172.16.123.1
+    &quot;seq&quot;: 3
+    &quot;uuid&quot;: &quot;redis-39mysN&quot;
+    &quot;role&quot;: &quot;redis&quot;
+    &quot;payload&quot;: {&quot;some&quot;: &quot;stuff&quot;}
+}
+</pre></div>
+</div>
+<p>The UUID and sequence counter are guaranteed to be unique amongst all the monitored pods. The payload field is
+optional and set if the slaves have <strong>$KONTROL_PAYLOAD</strong> set.</p>
+<p>The following <a class="reference external" href="https://www.python.org/">Python</a> callback script will for instance display the UUID and IPv4 address assigned to each pod:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/python</span>
 
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">sys</span>
 <span class="kn">import</span> <span class="nn">json</span>
 
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Trivial callback example enumerating pods.</span>
-<span class="sd">&quot;&quot;&quot;</span>
-
 <span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
 
-    <span class="c1">#</span>
-    <span class="c1"># - fetch the current pod snapshot via $POD</span>
-    <span class="c1"># - $POD is guaranteed to be always available</span>
-    <span class="c1">#</span>
-    <span class="n">pods</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;PODS&#39;</span><span class="p">])</span>
-
-    <span class="c1">#</span>
-    <span class="c1"># - display our pods on stderr</span>
-    <span class="c1"># - $POD is guaranteed to contain consistenly ordered pod information</span>
-    <span class="c1">#</span>
-    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s1">&#39;monitoring </span><span class="si">%s</span><span class="s1"> pods&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">pods</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">pod</span> <span class="ow">in</span> <span class="n">pods</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">pod</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;PODS&#39;</span><span class="p">]):</span>
         <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s1">&#39; - #</span><span class="si">%d</span><span class="s1"> (</span><span class="si">%s</span><span class="s1">) -&gt; </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">pod</span><span class="p">[</span><span class="s1">&#39;seq&#39;</span><span class="p">],</span> <span class="n">pod</span><span class="p">[</span><span class="s1">&#39;uuid&#39;</span><span class="p">],</span> <span class="n">pod</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">])</span>
 </pre></div>
 </div>
@@ -151,10 +157,10 @@ array whose entries are consistently ordered.</p>
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">Configuration</a><ul>
-<li><a class="reference internal" href="#setup">Setup</a></li>
 <li><a class="reference internal" href="#environment-variables">Environment variables</a></li>
 <li><a class="reference internal" href="#operating-mode">Operating mode</a></li>
 <li><a class="reference internal" href="#etcd">Etcd</a></li>
+<li><a class="reference internal" href="#pod-payload">Pod payload</a></li>
 <li><a class="reference internal" href="#callback">Callback</a></li>
 </ul>
 </li>

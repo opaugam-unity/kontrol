@@ -63,5 +63,12 @@ multiple invokations. This is critical to maintain consistent runtime informatio
 the overall system is evolving. A typical use-case would be to assign and track custom ids or to
 be able to re-assign existing data to new pods.
 
+Telemetry
+_________
+
+You also have the option to relay arbitrary json data in the keepalive requests that are emitted
+periodically. This is done by directing Kontrol to use a json file on disk. Any update to this file
+will be reflected in the overall pod snapshot and trigger a callback.
+
 
 .. include:: links.rst
