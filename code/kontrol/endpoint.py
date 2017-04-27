@@ -8,8 +8,8 @@ import urllib3
 from flask import Flask, request
 from logging import DEBUG
 from logging.config import fileConfig
-from kontrol import bag, fsm
-from kontrol.action import Actor as Action
+from kontrol.fsm import MSG, diagnostic, shutdown
+from kontrol.script import Actor as Script
 from kontrol.callback import Actor as Callback
 from kontrol.keepalive import Actor as KeepAlive
 from kontrol.leader import Actor as Leader
@@ -46,24 +46,27 @@ def _ping():
         return '', 500
 
 
-@http.route('/action/<key>', methods=['PUT'])
-def _action(key):
+@http.route('/script', methods=['PUT'])
+def _script():
 
     #
-    # - PUT /action (e.g script evaluation request from the controller)
-    # - post it to the action actor
+    # - PUT /script (e.g script evaluation request from the controller)
+    # - post it to the script actor
     # - block on a latch and reply
     #
     try:
-        script = bag()
-        script.cmd = key
-        script.env = {'INPUT': request.data}
-        script.latch = ThreadingFuture()     
-        logger.debug('PUT /action <- invoking "%s"' % key)
-        kontrol.actors['action'].tell({'request': 'invoke', 'script': script})
-        return script.latch.get(timeout=5), 200
+        js = request.get_json(silent=True, force=True)
+
+        msg = MSG({'request': 'invoke'})
+        msg.cmd = js['cmd']
+        msg.env = {'INPUT': json.dumps(js)}
+        msg.latch = ThreadingFuture()     
+
+        logger.debug('PUT /script <- invoking "%s"' % msg.cmd)
+        kontrol.actors['script'].tell(msg)
+        return msg.latch.get(timeout=5), 200
         
-    except Exception:
+    except Exception as e:
         return '', 500
 
 def up():
@@ -138,7 +141,7 @@ def up():
         # -
         #
         if 'master' in tokens:
-            stubs += [Action, Callback, Leader, Sequence]
+            stubs += [Script, Callback, Leader, Sequence]
 
         #
         # - start our various actors
@@ -156,7 +159,7 @@ def up():
         # - bad, probably some missing environment variables
         # - abort the worker
         #
-        why = fsm.diagnostic(failure)
+        why = diagnostic(failure)
         logger.error('top level failure -> %s' % why)
 
 def down():
@@ -165,7 +168,7 @@ def down():
     if terminating:
         for key, actor in kontrol.actors.items():
             logger.debug('terminating actor <%s>' % key)
-            fsm.shutdown(actor)
+            shutdown(actor)
     #
     # - gunicorn appears to trigger this callback twice
     # - use a flag and only react the 2nd time

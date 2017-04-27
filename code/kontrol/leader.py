@@ -7,8 +7,7 @@ import os
 import requests
 import time
 
-from kontrol import bag
-from kontrol.fsm import Aborted, FSM
+from kontrol.fsm import Aborted, FSM, MSG
 
 
 #: our ochopod logger
@@ -140,10 +139,11 @@ class Actor(FSM):
             logger.debug('%s : invoking callback, MD5 digest -> %s' % (self.path, md5))
             self.client.write('/kontrol/%s/md5' % self.cfg['labels']['app'], md5)
             if 'callback' in self.cfg:
-                script = bag()
-                script.cmd = self.cfg['callback']
-                script.env = {'MD5': md5, 'PODS': json.dumps(self.snapshot)}     
-                kontrol.actors['callback'].tell({'request': 'invoke', 'script': script})
+
+                msg = MSG({'request': 'invoke'})
+                msg.cmd = self.cfg['callback']
+                msg.env = {'MD5': md5, 'PODS': json.dumps(self.snapshot)}     
+                kontrol.actors['callback'].tell(msg)
          
             else:
                 logger.warning('%s: $KONTROL_CALLBACK is not set (user error ?)' % self.path)

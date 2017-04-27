@@ -25,3 +25,22 @@ setup(
             ]
     }
 )
+
+setup(
+    name='automaton',
+    version=__version__,
+    packages=find_packages(),
+    entry_points=
+        {
+            'console_scripts':
+                [
+                    'automaton = automaton.main:go'
+                ]
+        },
+    package_data={
+        'automaton':
+            [
+                'log.cfg'
+            ]
+    }
+)

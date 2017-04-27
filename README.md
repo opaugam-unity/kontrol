@@ -2,20 +2,19 @@
 
 ### Overview
 
-This project is a small [**Python**](https://www.python.org/) endpoint you can include to
-any [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes) pod. It relies on
-[**etcd**](https://github.com/coreos/etcd) for synchronization, leader election and
-persistence. You can either decide to leverage the interal cluster used by
-Kubernetes or run your own.
+This project packages a small [**Python**](https://www.python.org/) REST endpoint you can
+include to any [**Kubernetes**](https://github.com/GoogleCloudPlatform/kubernetes) pod. It
+relies on [**Etcd**](https://github.com/coreos/etcd) for synchronization, leader election
+and persistence and will allow you to run code whenever a change occurs within the a set
+of monitored pods.
 
-### What does it do ?
-
-Kontrol implements a simple distributed control loop allowing you to react to any change
-within your pod ensemble and trigger your own callback logic. Changes include for instance
-scaling events, unexpected pod or node failures or updates to what each pod reports.
+It also offers a simple command-line tool to run a finite state machine that is controlled
+via a local unix socket. This machine can be used to script the lifecycle of whatever
+process is managed by Kontrol.
 
 ### Documentation
 
+Please look at the URL attached to this repository. It will take you to its latest github page.
 The [**Sphinx**](http://sphinx-doc.org/) materials can be found under docs/. Just go in there
 and build for your favorite target, for instance:
 

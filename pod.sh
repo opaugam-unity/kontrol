@@ -40,7 +40,7 @@ daemon = False
 bind = '0.0.0.0:8000'
 timeout = 15
 graceful_timeout = 60
-worker_class = 'sync'
+worker_class = 'eventlet'
 workers = 1
 from kontrol.endpoint import up, down
 def post_worker_init(worker):

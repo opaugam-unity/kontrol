@@ -1,9 +1,85 @@
+Kontrol
+=======
+
+Introduction
+____________
+
+Overview
+********
+
+*Kontrol* is a small Python_ package which implements a REST/HTTP endpoint plus a set of
+Pykka_ state-machines. It is used to report periodic keepalive messages from a set of
+pods and aggregate them in Etcd_.
+
+.. figure:: png/overview.png
+   :align: center
+   :width: 90%
+
+The goal is to detect any change within this set of pods and react to it via a user-defined
+callback. This callback is provided the ordered list of all participating pods with details
+such as their IPv4 address and so on.
+
+Kontrol is designed to address a few common use cases: passive monitoring and alerting,
+distributed configuration or self-healing. You can use it in various topologies: separate
+master & slave tiers, mixed mode (e.g self-managing pod ensemble) or even setup a chain of
+masters (e.g monitoring the monitor).
+
+System design
+*************
+
+Kontrol operates in either slave, master or mixed mode. A **slave** will periodically emit a
+keepalive payload to its **master** tier. This payload include information about the pod itself
+plus some optional user-data. The masters will receive those keepalives and maintain a MD5 digest
+reflecting the overall ensemble state. Any time this digest changes for whatever reason a
+user defined callback is executed. The masters are HA and will fail-over in case of problem. They
+are typically run via a Kubernetes_ deployment fronted by a service. Any master can receive
+keepalives but only one at any given is in charge of tracking the digest and executing the callback.
+
+All the locking, leader election and persistence is done 100% in Etcd_.
+
+.. figure:: png/schematic.png
+   :align: center
+   :width: 90%
+
+Please note you can run in both **master**/**slave** meaning the same pod deployment can run its
+own monitoring logic.
+
+
+Pod ordering
+************
+
+It is crucial to keep consistent ordering for the pods that are monitored. Kontrol does it by first
+identifying pods using their base 62 shortened Kubernetes_ IPv4 address. A monotonic integer sequence
+is also assigned to each pod the first time they emit a keepalive. This sequence counter is then
+persisted as long as the pod is alive.
+
+
+Action/Reaction
+***************
+
+Kontrol also allows slaves to execute arbitrary commands on behalf of the master. This mechanism
+is the primary way to actively control your pod ensemble. Those commands are run by the *kontrol*
+user and anything written to the standard output is sent back to the master.
+
+It is also important to note that the callback has the ability to persist its own user-data across
+multiple invokations. This is critical to maintain consistent runtime information describing how
+the overall system is evolving. A typical use-case would be to assign and track custom ids or to
+be able to re-assign existing data to new pods.
+
+Telemetry
+*********
+
+You also have the option to relay arbitrary json data in the keepalive requests that are emitted
+periodically. This is done by directing Kontrol to use a json file on disk. Any update to this file
+will be reflected in the overall pod snapshot and trigger a callback.
+
+
 Configuration
-=============
+_____________
 
 
 Environment variables
-_____________________
+*********************
 
 Kontrol is configured via a few environments variables. Those are mostly defaulted based on what
 the Kubernetes_ pod provides. A few can be specified in the manifest.
@@ -20,7 +96,7 @@ The labels are picked for you from the Kubernetes_ pod metadata. However you **m
 define the **app* and **role** labels as they are used by Kontrol.
 
 Operating mode
-______________
+**************
 
 Kontrol can run in different modes. The **$KONTROL_MODE** variable is a comma separated list of tokens
 indicating what underlying actors to run. Valid token values include *slave*, *master*, *debug* and *verbose*.
@@ -43,14 +119,14 @@ Please note this assumes you have a local Etcd_ running on your local host and l
 
 
 Etcd
-____
+****
 
 The **$KONTROL_ETCD** variable is defaulted to the kube proxy IPv4. This assumes the Etcd_ proxy running in there
 is listening on all interfaces. If you want to use a dedicated Etcd_ proxy you can override this variable.
 
 
 Pod payload 
-___________
+***********
 
 Slaves have the ability to include arbirary json payload in their keepalives. Simply set the **$KONTROL_PAYLOAD**
 variable to point to a file on disk containing valid serialized JSON. This content will be parsed and included
@@ -60,7 +136,7 @@ If the variable is not set or if the file does not exist or contains invalid JSO
 
 
 Callback
-________
+********
 
 Kontrol will periodically run a user-defined callback whenever a change is detected. This callback is an
 arbitrary command you can specify via the **$KONTROL_CALLBACK** variable. This subprocess is tracked and its

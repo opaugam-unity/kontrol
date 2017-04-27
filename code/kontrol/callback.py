@@ -1,6 +1,7 @@
 import etcd
 import json
 import logging
+import time
 
 from collections import deque
 from etcd import EtcdKeyNotFound
@@ -55,28 +56,29 @@ class Actor(FSM):
         # - this thread will go down automatically when the sub-process does
         # - set the $STATE env. variable which contains the persistent user-data
         #
-        what = self.fifo[0]
+        msg = self.fifo[0]
         try:
             raw = self.client.read('/kontrol/%s/state' % self.cfg['labels']['app']).value
             if raw:
-                what.env['STATE'] = raw
+                msg.env['STATE'] = raw
         except EtcdKeyNotFound:
             pass
 
         try:
-            data.pid = Popen(what.cmd.split(' '),
+            data.tick = time.time()
+            data.pid = Popen(msg.cmd.split(' '),
             close_fds=True,
             bufsize=0,
-            env=what.env,
+            env=msg.env,
             stderr=PIPE,
             stdout=PIPE)
        
         except OSError:
-            logger.warning('%s : script "%s" could not be found (config bug ?)' % (self.path, what.cmd))   
+            logger.warning('%s : script "%s" could not be found (config bug ?)' % (self.path, msg.cmd))   
             self.fifo.popleft()
             return 'initial', data, 0.0
 
-        logger.debug('%s : invoking script "%s" (pid %s)' % (self.path, what.cmd, data.pid.pid))
+        logger.debug('%s : invoking script "%s" (pid %s)' % (self.path, msg.cmd, data.pid.pid))
         return 'wait_for_completion', data, 0.25
 
     def wait_for_completion(self, data):
@@ -87,15 +89,18 @@ class Actor(FSM):
         #
         if data.pid.poll() is not None:
             code = data.pid.returncode
-            err = [line.rstrip('\n') for line in iter(data.pid.stderr.readline, b'')]
-            logger.info('%s : pid %s (exit %d) ->\n  . %s' % (self.path, data.pid.pid, code, '\n  . '.join(err)))
+            stdout = [line.rstrip('\n') for line in iter(data.pid.stdout.readline, b'')]
+            stderr = [line.rstrip('\n') for line in iter(data.pid.stderr.readline, b'')]
+            lapse = time.time() - data.tick
+            logger.info('%s: callback took %2.1f s (pid %s, exit %d)' % (self.path, lapse, data.pid.pid, code))
+            if stderr:
+                logger.debug('%s : stderr (pid %s) -> \n  . %s' % (self.path, data.pid.pid, '\n  . '.join(stderr)))
             
             #
             # - attempt to parse stdout into a json object
             #
             try:
-                out = [line.rstrip('\n') for line in iter(data.pid.stdout.readline, b'')]
-                self.client.write('/kontrol/%s/state' % self.cfg['labels']['app'], ''.join(out))
+                self.client.write('/kontrol/%s/state' % self.cfg['labels']['app'], ''.join(stdout))
             except ValueError:
                 logger.warning('%s : unable to parse stdout into json (script error ?)' % self.path)
 
@@ -119,8 +124,7 @@ class Actor(FSM):
             # - buffer the incoming script in our fifo
             # - we'll dequeue it upon the next spin
             #
-            assert 'script' in msg, 'invalid message -> "%s" (bug ?)' % msg
-            self.fifo.append(msg['script'])
+            self.fifo.append(msg)
         else:
             super(Actor, self).specialized(msg)
         

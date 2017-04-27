@@ -4,7 +4,6 @@ import sys
 import time
 import traceback
 
-from kontrol import bag
 from pykka import ThreadingActor, ThreadingFuture, Timeout
 from pykka.exceptions import ActorDeadError
 from random import randint
@@ -177,6 +176,12 @@ class Aborted(Exception):
         return str(self.log[-1])
 
 
+class MSG(dict):
+    """
+    Placeholder we pass across states in the fsm (e.g that *data* parameter) with some extra attributes.
+    """
+    pass
+
 class FSM(ThreadingActor):
     """
     Simple finite state-machine actor that will loop through one or more states. Each state is implemented as
@@ -190,7 +195,7 @@ class FSM(ThreadingActor):
         self.dying = 0
         self.latches = []
         self.path = '?'
-        self.payload = bag(copy.deepcopy(payload) if payload else {})
+        self.payload = MSG(copy.deepcopy(payload) if payload else {})
         self.terminate = 0
         self.last_reset = time.time()
         self.damper = 0
@@ -318,18 +323,20 @@ class FSM(ThreadingActor):
                     func = getattr(self, cmd['state'], None)
                     assert func, '<' + cmd['state'] + '> does not exist'
                     assert callable(func), '<' + cmd['state'] + '> must be a callable'
-                    next, data, delay = func(cmd['data'])
-                    data['previous'] = cmd['state']
-                    payload = \
-                        {
-                            'fsm':
-                                {
-                                    'state': next,
-                                    'data': data
-                                }
-                        }
-                    assert delay >= 0, 'the delay until the next state switch must be positive'
-                    self.fire(payload, delay)
+                    out = func(cmd['data'])
+                    if out is not None:
+                        nxt, data, delay = out
+                        data['previous'] = cmd['state']
+                        payload = \
+                            {
+                                'fsm':
+                                    {
+                                        'state': nxt,
+                                        'data': data
+                                    }
+                            }
+                        assert delay >= 0, 'the delay until the next state switch must be positive'
+                        self.fire(payload, delay)
 
             except PoisonPill:
 
