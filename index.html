@@ -26,7 +26,7 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Introduction" href="intro.html" />
+    <link rel="next" title="Kontrol" href="kontrol.html" />
    
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9">
@@ -45,7 +45,7 @@
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="intro.html" title="Introduction"
+          <a href="kontrol.html" title="Kontrol"
              accesskey="N">next</a> |</li>
         <li class="nav-item nav-item-0"><a href="#">kontrol 1.0 documentation</a> &#187;</li> 
       </ul>
@@ -58,29 +58,46 @@
             
   <div class="section" id="overview">
 <h1>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="kontrol">
-<h2>Kontrol<a class="headerlink" href="#kontrol" title="Permalink to this headline">¶</a></h2>
-<p>Kontrol is a simple distributed control loop managing <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> pods. You can include its
-<a class="reference external" href="https://www.docker.com/">Docker</a> container in your pods to quickly implement monitoring, distributed configuration and more.</p>
+<div class="section" id="kontrol-automaton">
+<h2>Kontrol &amp; Automaton<a class="headerlink" href="#kontrol-automaton" title="Permalink to this headline">¶</a></h2>
+<p><em>Kontrol</em> is a distributed control loop managing <a class="reference external" href="https://github.com/GoogleCloudPlatform/kubernetes/">Kubernetes</a> pods. You can include its
+<a class="reference external" href="https://www.docker.com/">Docker</a> container in your pods to quickly implement monitoring, distributed configuration
+and more.</p>
+<p>It comes with <em>Automaton</em> which is a finite-state machine that runs shell scripts and which
+can be transitioned by writing to a local unix socket. This is a convenient way to script
+what the lifecycle of your software should be.</p>
+<p>You can use both <em>Kontrol</em> and <em>Automaton</em> in tandem to implement strong distributed system
+with consistent behavior.</p>
 </div>
 <div class="section" id="contents">
 <h2>Contents<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="intro.html">Introduction</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#overview">Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#system-design">System design</a></li>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#pod-ordering">Pod ordering</a></li>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#action-reaction">Action/Reaction</a></li>
-<li class="toctree-l2"><a class="reference internal" href="intro.html#telemetry">Telemetry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kontrol.html">Kontrol</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="kontrol.html#introduction">Introduction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#overview">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#system-design">System design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#pod-ordering">Pod ordering</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#action-reaction">Action/Reaction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#telemetry">Telemetry</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#environment-variables">Environment variables</a></li>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#operating-mode">Operating mode</a></li>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#etcd">Etcd</a></li>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#pod-payload">Pod payload</a></li>
-<li class="toctree-l2"><a class="reference internal" href="configuration.html#callback">Callback</a></li>
+<li class="toctree-l2"><a class="reference internal" href="kontrol.html#configuration">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#environment-variables">Environment variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#operating-mode">Operating mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#etcd">Etcd</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#pod-payload">Pod payload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kontrol.html#callback">Callback</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="automaton.html">Automaton</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="automaton.html#introduction">Introduction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="automaton.html#overview">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="automaton.html#getting-started">Getting started</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -108,7 +125,7 @@
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">Overview</a><ul>
-<li><a class="reference internal" href="#kontrol">Kontrol</a></li>
+<li><a class="reference internal" href="#kontrol-automaton">Kontrol &amp; Automaton</a></li>
 <li><a class="reference internal" href="#contents">Contents</a></li>
 <li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
 </ul>
@@ -117,7 +134,7 @@
 <h3>Related Topics</h3>
 <ul>
   <li><a href="#">Documentation overview</a><ul>
-      <li>Next: <a href="intro.html" title="next chapter">Introduction</a></li>
+      <li>Next: <a href="kontrol.html" title="next chapter">Kontrol</a></li>
   </ul></li>
 </ul>
 <div id="searchbox" style="display: none" role="search">

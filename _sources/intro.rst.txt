@@ -4,7 +4,7 @@ Introduction
 Overview
 ________
 
-Kontrol is a small Python_ package which implements a REST/HTTP endpoint plus a set of
+*Kontrol is a small Python_ package which implements a REST/HTTP endpoint plus a set of
 Pykka_ state-machines. It is used to report periodic keepalive messages from a set of
 pods and aggregate them in Etcd_.
 
