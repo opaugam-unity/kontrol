@@ -34,7 +34,8 @@ def _ping():
 
     #
     # - PUT /ping (e.g keepalive updates from supervised containers)
-    # - post to the sequence actor
+    # - post to the sequence actor (please note this of course will only
+    #   work in master mode)
     #
     try:
         js = request.get_json(silent=True, force=True)
@@ -51,8 +52,7 @@ def _script():
 
     #
     # - PUT /script (e.g script evaluation request from the controller)
-    # - post it to the script actor
-    # - block on a latch and reply
+    # - post it to the script actor (this will only work in slave mode)
     #
     try:
         js = request.get_json(silent=True, force=True)
@@ -62,9 +62,13 @@ def _script():
         msg.env = {'INPUT': json.dumps(js)}
         msg.latch = ThreadingFuture()     
 
+        #
+        # - block on a latch and reply with whatever the shell script
+        #   wrote to its standard output
+        #
         logger.debug('PUT /script <- invoking "%s"' % msg.cmd)
         kontrol.actors['script'].tell(msg)
-        return msg.latch.get(timeout=5), 200
+        return msg.latch.get(timeout=60), 200
         
     except Exception as e:
         return '', 500
@@ -101,8 +105,8 @@ def up():
         stubs = []
         keys = [key for key in os.environ if key.startswith('KONTROL_')]            
         js = {key[8:].lower():_try(key) for key in keys}
-        logger.info('$KONTROL_* defined: %s' % ','.join(keys))
-        assert all(key in js for key in ['etcd', 'ip', 'labels', 'mode']), '1+ environment variables missing'
+        [logger.info(' - $%s -> %s' % (key, os.environ[key])) for key in keys]
+        assert all(key in js for key in ['id', 'etcd', 'ip', 'labels', 'mode', 'damper', 'ttl']), '1+ environment variables missing'
         tokens = set(js['mode'].split(','))
         assert all(key in ['slave', 'master', 'debug', 'verbose'] for key in tokens), 'invalid $KONTROL_MODE value'
 
@@ -126,22 +130,22 @@ def up():
             {
                 'etcd': ip,
                 'ip': ip,
-                'mode': 'mixed',
+                'id': 'local',
                 'labels': {'app':'local', 'role': 'test', 'master': ip}
             }
             js.update(overrides)
         
         #
-        # -
+        # - slave mode just requires the KeepAlive and Script actors
         #
         if 'slave' in tokens:
-            stubs += [KeepAlive]
+            stubs += [KeepAlive, Script]
         
         #
-        # -
+        # - master mode requires the Callback, Leader and Sequence actors
         #
         if 'master' in tokens:
-            stubs += [Script, Callback, Leader, Sequence]
+            stubs += [Callback, Leader, Sequence]
 
         #
         # - start our various actors

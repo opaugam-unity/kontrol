@@ -109,6 +109,7 @@ class Actor(FSM):
         #
         # @todo can we possibly use a watch and/or track indices?
         #
+        now = time.time()
         hashed = hashlib.md5()
         raw = self.client.read('/kontrol/%s/pods' % self.cfg['labels']['app'], recursive=True)
         pods = [json.loads(item.value) for item in raw.leaves if item.value]
@@ -120,12 +121,12 @@ class Actor(FSM):
         # - compare the new digest against the last one
         # - if they differ trigger a callback after a cool-down period
         #
-        now = time.time()
         if md5 != self.md5:
             data.dirty = True
             self.md5 = md5
-            data.trigger = now + 0.0
-            logger.debug('%s : change detected, script invokation in 10 s' % self.path)
+            damper = int(self.cfg['damper'])
+            data.trigger = now + damper
+            logger.debug('%s : change detected, script invokation in %d s' % (self.path, damper))
 
         if data.dirty and now > data.trigger:
                         

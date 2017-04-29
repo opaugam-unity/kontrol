@@ -3,7 +3,6 @@ import ez_setup
 
 ez_setup.use_setuptools()
 
-from kontrol import __version__
 from setuptools import setup, find_packages
 
 if sys.version_info < (2, 7):
@@ -11,25 +10,25 @@ if sys.version_info < (2, 7):
 
 setup(
     name='kontrol',
-    version=__version__,
+    version='0.5.0',
     packages=find_packages(),
     install_requires=
     [
         'pykka>=1.2.0',
-        'python-etcd>=0.4.3'
+        'python-etcd>=0.4.3',
+        'pyyaml>=3.12',
+        'jsonschema>=2.6.0'
     ],
     package_data={
         'kontrol':
             [
                 'log.cfg'
+            ],
+        'automaton':
+            [
+                'log.cfg'
             ]
-    }
-)
-
-setup(
-    name='automaton',
-    version=__version__,
-    packages=find_packages(),
+    },
     entry_points=
         {
             'console_scripts':
@@ -37,10 +36,4 @@ setup(
                     'automaton = automaton.main:go'
                 ]
         },
-    package_data={
-        'automaton':
-            [
-                'log.cfg'
-            ]
-    }
 )

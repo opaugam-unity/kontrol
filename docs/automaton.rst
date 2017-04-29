@@ -57,21 +57,21 @@ the socket to create:
 
 .. code-block:: shell
 
-    $ automaton bot.yml -d -s bot.sock
+    $ automaton bot.yml -d -s /tmp/sock
 
 The machine will start and automatically switch to its initial state. You can test it is now
 in the *A* state by using socat to write to the socket:
 
 .. code-block:: shell
 
-    $ echo STATE | socat - ./bot.sock
+    $ echo STATE | socat - /tmp/sock
     A
 
 Now let's trip it to the B state. After 5 seconds you should be able to see that *foo* file.
 
 .. code-block:: shell
 
-    $echo GOTO B | socat - ./bot.sock
+    $echo GOTO B | socat - /tmp/sock
     $ls -s foo
     0 foo
 
@@ -81,7 +81,7 @@ script as the **$INPUT** environment variable. For instance:
 
 .. code-block:: shell
 
-    $echo GOTO B hello | socat - ./bot.sock
+    $echo GOTO B hello | socat - /tmp/sock
     $cat foo
     hello
 

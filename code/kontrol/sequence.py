@@ -2,6 +2,7 @@ import etcd
 import json
 import logging
 import requests
+import time
 
 from collections import deque
 from etcd import EtcdAlreadyExist, EtcdKeyNotFound
@@ -51,11 +52,12 @@ class Actor(FSM):
         while self.fifo:
 
             #
-            # - lookup the key given the application label and the pod UUID
+            # - lookup the key given the application label and the pod id
             # - attempt to read its payload
             #
+            now = time.time()
             nxt = self.fifo[0]
-            path = '/kontrol/%s/pods/%s' % (self.cfg['labels']['app'], nxt['uuid'])
+            path = '/kontrol/%s/pods/%s' % (self.cfg['labels']['app'], nxt['id'])
             try:
                 js = json.loads(self.client.read(path).value)
             
@@ -69,8 +71,13 @@ class Actor(FSM):
                 js = {'seq': self._next()}
 
             js.update(nxt)
-            self.client.write(path, json.dumps(js), ttl=60)
-            logger.debug('%s : keepalive from %s (pod #%d)' % (self.path, js['uuid'], js['seq']))
+
+            #
+            # -
+            #
+            ttl = int(self.cfg['ttl'])
+            self.client.write(path, json.dumps(js), ttl=ttl)
+            logger.debug('%s : keepalive from %s (pod #%d)' % (self.path, js['id'], js['seq']))
             self.fifo.popleft()
 
         return 'initial', data, 0.25

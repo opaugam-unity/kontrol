@@ -57,8 +57,9 @@ class Actor(FSM):
         msg = self.fifo[0]
         data.latch = msg.latch
         data.tick = time.time()
-        data.pid = Popen(msg.cmd.split(' '),
+        data.pid = Popen(msg.cmd,
         close_fds=True,
+        shell=True,
         bufsize=0,
         env=msg.env,
         stderr=PIPE,
@@ -86,7 +87,7 @@ class Actor(FSM):
             # - release the latch to unblock the HTTP request
             #   handler
             #  
-            data.latch.set(''.join(stdout))
+            data.latch.set('\n'.join(stdout))
             Event()
 
             #

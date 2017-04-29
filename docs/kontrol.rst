@@ -89,6 +89,8 @@ the Kubernetes_ pod provides. A few can be specified in the manifest.
 - **$KONTROL_ETCD**: IPv4 address for a Etcd_ proxy (defaulted).
 - **$KONTROL_LABELS**: pod's label dictionary (defaulted).
 - **$KONTROL_MODE**: pod operating mode, see below (defaulted).
+- **$KONTROL_DAMPER**: reactivity damper (defaulted).
+- **$KONTROL_TTL**: pod keepalive cutoff (defaulted).
 - **$KONTROL_CALLBACK**: executable to run upon callback (optional).
 - **$KONTROL_PAYLOAD**: local json file on disk to add to the keepalives (optional).
 

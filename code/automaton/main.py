@@ -9,10 +9,9 @@ import yaml
 
 from jsonschema import ValidationError
 from kontrol.fsm import MSG, shutdown, diagnostic
-from logging import DEBUG, Formatter
-from logging.config import fileConfig
-from os.path import dirname, exists
-from states import Actor as States
+from logging import DEBUG
+from os.path import exists
+from machine import Actor as Machine
 from yaml import YAMLError
 
 
@@ -47,11 +46,10 @@ properties:
 
 
 def go():
+
     """
     Entry point for the front-facing automaton script.
     """
-
-    fileConfig('%s/log.cfg' % dirname(__file__), disable_existing_loggers=True)
     parser = argparse.ArgumentParser(description='automaton', prefix_chars='-')
     parser.add_argument('manifest', type=str, help='YAML manifest')
     parser.add_argument('-s', '--socket', type=str, default='/var/run/automaton.sock', help='unix socket path')
@@ -88,13 +86,16 @@ def go():
             
             #
             # - start our actor
-            # - trip it into its initial state
-            # - no big deal if the initial state is invalid
+            # - trip it into its initial state using a fake message
+            # - no big deal if the initial state is invalid (the machine
+            #   will just remain in 'idle' state until it receives something
+            #   valid)
             #
             cfg.args = args
-            actor = States.start(cfg)
-            actor.tell(MSG({'request': 'cmd', 'raw': 'GOTO %s' % cfg['initial']}))
-            
+            actor = Machine.start(cfg)
+            msg = MSG({'request': 'cmd', 'raw': 'GOTO %s' % cfg['initial']})
+            msg.cnx = None
+            actor.tell(msg)
             while True:
 
                 #
@@ -131,10 +132,14 @@ def go():
     except YAMLError:
         print 'cannot load the YAML manifest'
 
-    except Exception as e:
-        print e
+    except Exception as failure:
+        print 'unexpected failure -> %s' % diagnostic(failure)
+
     finally:
         fd.close()
     
+    #
+    # - cleanup the socket file
+    #
     os.remove(args.socket)
     sys.exit(0)

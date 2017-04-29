@@ -4,7 +4,7 @@ import logging
 import time
 
 from collections import deque
-from kontrol.fsm import Aborted, FSM
+from kontrol.fsm import Aborted, FSM, diagnostic
 from os.path import abspath
 from subprocess import Popen, PIPE, STDOUT
 
@@ -24,7 +24,7 @@ class Actor(FSM):
     to be killed. Transition requests are buffered and processed in order.
     """
 
-    tag = 'states'
+    tag = 'machine'
 
     def __init__(self, cfg):
         super(Actor, self).__init__()
@@ -61,7 +61,6 @@ class Actor(FSM):
             # - proceed with the first one matching the pattern
             #
             msg = self.fifo[0]
-            logger.info(msg)
             try:
 
                 assert msg.state in self.states, 'unknown state "%s"' % msg.state
@@ -88,6 +87,7 @@ class Actor(FSM):
                             'SOCKET': abspath(self.cfg.args.socket),
                             'INPUT': msg.extra
                         }
+
                         data.tick = time.time()
                         data.pid = Popen(self.cur['shell'],
                         close_fds=True,
@@ -97,14 +97,29 @@ class Actor(FSM):
                         stderr=STDOUT,
                         stdout=PIPE)
                         logger.debug('%s : invoking script (pid %s)' % (self.path, data.pid.pid))
+
+                        #
+                        # - if we are not blocking send the 'OK' ack immediately
+                        # - close the socket
+                        #
+                        if not msg.wait:
+                            self._ack(msg, 'OK')
+
                         return 'wait_for_completion', data, 0.25
 
                 logger.warning('%s : %s -> %s is not allowed, skipping' % (self.path, self.cur['tag'], msg.state))
-    
+
             except Exception as failure:
                 logger.warning('%s : %s' % (self.path, failure))
 
+            #
+            # - we failed to transition for whatever reason
+            # - pop the FIFO
+            # - send back the 'KO' ack to signal the failure
+            # 
             self.fifo.popleft()
+            if msg.cnx:
+                self._ack(msg, 'KO')
             
         return 'initial', data, 0.25
 
@@ -124,15 +139,23 @@ class Actor(FSM):
         #
         if complete or len(self.fifo) > 1:
             if not complete:
-                logger.warning('%s : killing pid %s (%d transitions pending)' % (self.path, data.pid.pid, len(self.fifo)))
+                logger.warning('%s : killing pid %s (%d transitions pending)' % (self.path, data.pid.pid, len(self.fifo) - 1))
                 data.pid.kill()
 
             lapse = time.time() - data.tick
             code = data.pid.returncode if complete else '_'
             stdout = [line.rstrip('\n') for line in iter(data.pid.stdout.readline, b'')]
-            logger.info('%s : script took %2.1f s (pid %s, exit %s)' % (self.path, lapse, data.pid.pid, code))
+            logger.debug('%s : script took %2.1f s (pid %s, exit %s)' % (self.path, lapse, data.pid.pid, code))
             if stdout:
                 logger.debug('%s : stderr (pid %s) -> \n  . %s' % (self.path, data.pid.pid, '\n  . '.join(stdout)))
+
+            #
+            # - if blocking send back the 'OK' ack
+            # - close the socket
+            #
+            msg = self.fifo[0]
+            if msg.wait:
+                self._ack(msg, 'OK')
 
             data.pid = None
             self.fifo.popleft()
@@ -146,20 +169,30 @@ class Actor(FSM):
         if req == 'cmd':
 
             #
-            # -
+            # - parse the incoming command
+            # - right now we support WAIT, GOTO and STATE
             #
             tokens = msg['raw'].split(' ')
-            assert tokens[0] in ['STATE', 'GOTO']
+            assert tokens[0] in ['STATE', 'GOTO', 'WAIT'], 'invalid command'
 
             if tokens[0] == 'STATE':
-                msg.cnx.send(self.cur['tag'])
+                self._ack(msg, self.cur['tag'])
             
-            elif tokens[0] == 'GOTO':
+            elif tokens[0] in ['GOTO', 'WAIT']:
                 msg.state = tokens[1]
                 msg.extra = ' '.join(tokens[2:]) if len(tokens) > 2 else ''
+                msg.wait = tokens[0] == 'WAIT'
                 self.fifo.append(msg)
-
-            msg.cnx.close()
 
         else:
             super(Actor, self).specialized(msg)
+
+    def _ack(self, msg, code):
+        if msg.cnx is not None:
+            try:
+                msg.cnx.send(code)
+                msg.cnx.close()
+
+            except IOError:
+                pass
+                

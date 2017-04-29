@@ -1,13 +1,10 @@
 import json
 import logging
 import requests
-import string
-import struct
+import time
 
 from kontrol.fsm import Aborted, FSM
-from math import floor
 from os.path import isfile
-from socket import inet_aton
 
 
 #: our ochopod logger
@@ -19,7 +16,7 @@ class Actor(FSM):
     """
     Actor emitting a periodic HTTP POST request against the controlling party. This enables us
     to report relevant information about the pod. The pod UUID is derived from its IPv4 address
-    shortened via base 62 encoding.
+    and launch time shortened via base 62 encoding.
     """
 
     tag = 'keepalive'
@@ -29,8 +26,6 @@ class Actor(FSM):
 
         self.cfg = cfg
         self.path = '%s actor' % self.tag
-        self.uuid = '%s-%s' % (cfg['labels']['app'], self._shorten(struct.unpack("!I", inet_aton(cfg['ip']))[0]))
-        logger.info('%s : now using UUID %s' % (self.path, self.uuid))
 
     def reset(self, data):
 
@@ -50,9 +45,10 @@ class Actor(FSM):
         assert 'master' in self.cfg['labels'], 'invalid labels, "master" missing (bug?)'
         state = \
         {
-            'uuid': self.uuid,
+            'id': self.cfg['id'],
             'ip': self.cfg['ip'],
-            'role': self.cfg['labels']['role']
+            'role': self.cfg['labels']['role'],
+            'payload': {}
         }
 
         #
@@ -73,22 +69,15 @@ class Actor(FSM):
 
         #
         # - simply HTTP PUT our cfg with a 1 second timeout
-        # - default ping frequency is once every 5 seconds
+        # - the ping frequency is once every TTL * 0.75 seconds
         # - please note any failure to post will be handled with exponential backoff by
         #   the state-machine
         #
         # @todo use TLS
         #
+        ttl = int(self.cfg['ttl'])
         url = 'http://%s:8000/ping' % self.cfg['labels']['master']
         resp = requests.put(url, data=json.dumps(state), headers={'Content-Type':'application/json'}, timeout=1.0)
         resp.raise_for_status()
         logger.debug('%s : HTTP %d <- PUT /ping %s' % (self.path, resp.status_code, url))            
-        return 'initial', data, 5.0
-
-    def _shorten(self, n):
-        out = ''
-        alphabet = string.digits + string.lowercase + string.uppercase
-        while n:
-            out = alphabet[n % 62] + out
-            n = int(n / 62)
-        return out
+        return 'initial', data, ttl * 0.75
