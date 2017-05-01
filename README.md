@@ -12,6 +12,15 @@ It also offers a simple command-line tool to run a finite state machine that is 
 via a local unix socket. This machine can be used to script the lifecycle of whatever
 process is managed by Kontrol.
 
+### Building the image
+
+Pick a distro and build from the top-level directory. Please note the packages will be installed
+from github via *pip*. For instance:
+
+```
+$ docker build -f alpine-3.5/Dockerfile .
+```
+
 ### Documentation
 
 Please look at the URL attached to this repository. It will take you to its latest github page.
