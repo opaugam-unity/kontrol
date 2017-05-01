@@ -9,7 +9,6 @@ COPY ./ ./
 RUN /usr/bin/python setup.py install && \
     rm -rf docs automaton kontrol README.md *.py && \
     mkdir -p /etc/supervisor/conf.d && \
-    mv *.conf /etc/supervisor && \
     apk del g++ make && \
     chmod +x *.sh
 
@@ -18,4 +17,4 @@ RUN /usr/bin/python setup.py install && \
 # - use the default configuration under /etc/supervisor
 # - derived images are expected to add their jobs under /etc/supervisor/conf.d
 #
-ENTRYPOINT ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+ENTRYPOINT ["supervisord", "-n", "-c", "resources/supervisord.conf"]
