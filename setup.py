@@ -11,7 +11,7 @@ if sys.version_info < (2, 7):
 setup(
     name='kontrol',
     version='0.5.0',
-    packages=find_packages(),
+    packages=find_packages(where='code/*'),
     install_requires=
     [
         'pykka>=1.2.0',

@@ -14,7 +14,7 @@ from socket import inet_aton
 #: our ochopod logger
 logger = logging.getLogger('kontrol')
 
-
+print 'fo'
 class Actor(FSM):
 
     """
