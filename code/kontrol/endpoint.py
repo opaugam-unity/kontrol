@@ -131,7 +131,7 @@ def up():
                 'etcd': ip,
                 'ip': ip,
                 'id': 'local',
-                'labels': {'app':'local', 'role': 'test', 'master': ip}
+                'labels': {'app':'test', 'role': 'test', 'master': ip}
             }
             js.update(overrides)
         

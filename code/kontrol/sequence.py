@@ -53,11 +53,12 @@ class Actor(FSM):
 
             #
             # - lookup the key given the application label and the pod id
+            # - they etcd key is prefix by the master's application label
             # - attempt to read its payload
             #
             now = time.time()
             nxt = self.fifo[0]
-            path = '/kontrol/%s/pods/%s' % (self.cfg['labels']['app'], nxt['id'])
+            path = '/kontrol/%s/pods/%s' % (self.cfg['labels']['app'], nxt['key'])
             try:
                 js = json.loads(self.client.read(path).value)
             
@@ -73,11 +74,12 @@ class Actor(FSM):
             js.update(nxt)
 
             #
-            # -
+            # - make sure to sort the keys in the json being serialized to etcd
+            # - otherwise that could artifically change the MD5 digest
             #
             ttl = int(self.cfg['ttl'])
-            self.client.write(path, json.dumps(js), ttl=ttl)
-            logger.debug('%s : keepalive from %s (pod #%d)' % (self.path, js['id'], js['seq']))
+            self.client.write(path, json.dumps(js, sort_keys=True), ttl=ttl)
+            logger.debug('%s : keepalive from %s (pod #%d)' % (self.path, js['key'], js['seq']))
             self.fifo.popleft()
 
         return 'initial', data, 0.25

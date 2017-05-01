@@ -1,10 +1,14 @@
 import json
 import logging
 import requests
+import string
+import struct
 import time
 
 from kontrol.fsm import Aborted, FSM
+from math import floor
 from os.path import isfile
+from socket import inet_aton
 
 
 #: our ochopod logger
@@ -26,6 +30,8 @@ class Actor(FSM):
 
         self.cfg = cfg
         self.path = '%s actor' % self.tag
+        self.key = self._shorten(struct.unpack("!I", inet_aton(cfg['ip']))[0])
+        logger.info('%s : now using key %s (pod %s)' % (self.path, self.key, cfg['id']))
 
     def reset(self, data):
 
@@ -40,15 +46,18 @@ class Actor(FSM):
             raise Aborted('resetting')
 
         #
-        # -
+        # - assemble the payload that will be reported periodically to the masters
+        #   via the keepalive /PUT request
         #
         assert 'master' in self.cfg['labels'], 'invalid labels, "master" missing (bug?)'
         state = \
         {
+            'app': self.cfg['labels']['app'],
             'id': self.cfg['id'],
             'ip': self.cfg['ip'],
-            'role': self.cfg['labels']['role'],
-            'payload': {}
+            'key': self.key,
+            'payload': {},
+            'role': self.cfg['labels']['role']
         }
 
         #
@@ -56,6 +65,8 @@ class Actor(FSM):
         #   on disk that contains json user-data (for instance some statistics)
         # - this free-form payload will be included in the keepalive HTTP PUT,
         #   persisted in etcd and made available to the callback script
+        #
+        # @todo monitor the payload file and force a keepalive upon update
         #
         if 'payload' in self.cfg:
             try:
@@ -81,3 +92,15 @@ class Actor(FSM):
         resp.raise_for_status()
         logger.debug('%s : HTTP %d <- PUT /ping %s' % (self.path, resp.status_code, url))            
         return 'initial', data, ttl * 0.75
+
+    def _shorten(self, n):
+
+        #
+        # - trivial base 62 encoder
+        #
+        out = ''
+        alphabet = string.digits + string.lowercase + string.uppercase
+        while n:
+            out = alphabet[n % 62] + out
+            n = int(n / 62)
+        return out

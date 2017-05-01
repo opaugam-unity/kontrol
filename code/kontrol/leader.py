@@ -36,7 +36,7 @@ class Actor(FSM):
             try:
 
                 #
-                # -
+                # - make sure to proactively delete the lock key
                 #
                 self.client.delete(data.lock.key)
             except Exception:

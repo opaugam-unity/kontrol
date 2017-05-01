@@ -6,8 +6,8 @@ RUN apk add --no-cache openssl socat curl jq g++ make python2 python2-dev ca-cer
     pip install --upgrade pip pyyaml jsonschema eventlet shell supervisor cython gunicorn flask requests
 
 COPY ./ ./
-RUN (cd code && /usr/bin/python setup.py install) && \
-    rm -rf docs code README.md Dockerfile && \
+RUN /usr/bin/python setup.py install && \
+    rm -rf docs automaton kontrol README.md *.py && \
     mkdir -p /etc/supervisor/conf.d && \
     mv *.conf /etc/supervisor && \
     apk del g++ make && \
